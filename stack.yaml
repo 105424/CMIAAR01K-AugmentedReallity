@@ -1,0 +1,11 @@
+flags: {}
+extra-package-dbs: []
+packages:
+- '.'
+extra-deps:
+- friday-0.2.2.0
+- ratio-int-0.1.2
+- storable-0.1
+- cabal-helper-0.6.1.0
+- ghc-mod-5.4.0.0
+resolver: lts-3.14
