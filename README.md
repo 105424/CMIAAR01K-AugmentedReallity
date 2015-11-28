@@ -5,7 +5,7 @@ Repo containing my homework for CMIAAR01K Augmented Reality: maak de Rotterdamse
 The assignment are made as seperate stack applications so the reccommend way to run them is trough [stack](http://docs.haskellstack.org/en/stable/README.html)
 
 ```
-mv assignment_1
+cd assignment_1
 stack install
 stack build
 stack exec assignment1-exe "test.jpg"
@@ -15,7 +15,7 @@ stack exec assignment1-exe "test.jpg"
 For the first assignment we needed to implement a BW filter for both the RGB as the YUV format.
 Running the following command will create three images from the test.jpg image.
 ```
-mv assignment_1
+cd assignment_1
 stack install
 stack build
 stack exec assignment1-exe "test.jpg"
