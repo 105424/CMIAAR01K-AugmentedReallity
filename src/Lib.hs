@@ -1,5 +1,7 @@
 module Lib
-    ( main
+    ( fromRGBToYUVToRGB,
+      bwFilterWithYUV,
+      bwFilterWithRGB
     ) where
 
 import Foreign.Ptr
@@ -8,93 +10,75 @@ import Data.Word
 import Data.Array.Repa hiding ((++))
 import qualified Data.Array.Repa as R hiding ((++))
 import Data.Array.Repa.IO.DevIL as RD (readImage, runIL, writeImage, IL, Image( RGB )) 
+import Data.Array.Repa.IO.Matrix as RM 
 import Data.Array.Repa.Repr.ForeignPtr
 
--- wrap the traverse to accept our own Image type 
-{-data Image = RGB (Array F DIM3 Word8) | RGBA (Array F DIM3 Word8) | YUV (Array F DIM3 Word8)
-traverse :: Shape sh' => Lib.Image -> (DIM3 -> sh') -> ((DIM3 -> Word8) -> sh' -> b) -> Array D sh' b
-traverse (Lib.RGB i) s f = R.traverse i s f
-traverse (Lib.RGBA i) s f = R.traverse i s f
-traverse (Lib.YUV i) s f = R.traverse i s f-}
-
---
--- Read an image, desaturate, write out with new name.
---
-main :: IO ()
-main = do
-  [f,r] <- getArgs
-  bwFilterWithRGB f r
+-- examples
+fromRGBToYUVToRGB :: FilePath -> FilePath -> IO ()
+fromRGBToYUVToRGB f d = do
+  (RGB rgbInput) <- runIL $ RD.readImage f
+  let yuvImage = R.traverse rgbInput id fromRGBToYUV
+  rgbImage <- computeP $ R.traverse yuvImage id fromYUVtoRGB :: IO (Array F DIM3 Word8)
+  runIL $ RD.writeImage d (RD.RGB rgbImage)
 
 bwFilterWithYUV :: FilePath -> FilePath -> IO ()
 bwFilterWithYUV f d = do
-  runIL $ do
-    (RGB rgbInput) <- RD.readImage f
-    yuvImage <- (computeP $ R.traverse rgbInput id toYUV) :: IL (Array F DIM3 Word8)
-    rgbImage <- (computeP $ R.traverse yuvImage id bwFilterYUV) :: IL (Array F DIM3 Word8)
-    -- rgbImage <- (computeP $ R.traverse bwYuv id fromYUV) :: IL (Array F DIM3 Word8)
-    RD.writeImage d (RD.RGB rgbImage)
+  (RGB rgbInput) <- runIL $ RD.readImage f
+  let yuvImage = R.traverse rgbInput id fromRGBToYUV
+  let bwYuvImage = R.traverse yuvImage id bwFilterYUV
+  rgbImage <- computeP $ R.traverse bwYuvImage id fromYUVtoRGB :: IO (Array F DIM3 Word8)
+  runIL $ RD.writeImage d (RD.RGB rgbImage)
 
 bwFilterWithRGB :: FilePath -> FilePath -> IO ()
 bwFilterWithRGB f d = do
-  runIL $ do
-    (RGB rgbInput) <- RD.readImage f
-    rgbImage <- (computeP $ R.traverse rgbInput id bwFilterRGB) :: IL (Array F DIM3 Word8)
-    -- rgbImage <- (computeP $ R.traverse bwYuv id fromYUV) :: IL (Array F DIM3 Word8)
-    RD.writeImage d (RD.RGB rgbImage)
+  (RGB rgbInput) <- runIL $ RD.readImage f 
+  bwRgbImage <- (computeP $ R.traverse rgbInput id bwFilterRGB) :: IO (Array F DIM3 Word8)
+  runIL $ RD.writeImage d (RD.RGB bwRgbImage)
 
-
+-- cod
 bwFilterRGB :: (DIM3 -> Word8) -> DIM3 -> Word8
 bwFilterRGB f (Z :. i :. j :. k) =  case k of 0 -> ceiling $ (r + g + b) / 3
                                               1 -> ceiling $ (r + g + b) / 3
                                               2 -> ceiling $ (r + g + b) / 3
-                                              3 -> 255  -- alpha
-                                              _ -> f (Z :. i :. j :. k)
                                     where
                                        r = fromIntegral $ f (Z :. i :. j :. 0)
                                        g = fromIntegral $ f (Z :. i :. j :. 1)
-                                       b = fromIntegral $ f (Z :. i :. j :. 2)
-                            
+                                       b = fromIntegral $ f (Z :. i :. j :. 2)                            
 
-bwFilterYUV :: (DIM3 -> Word8) -> DIM3 -> Word8
+bwFilterYUV :: Fractional a => (DIM3 -> a) -> DIM3 -> a
 bwFilterYUV f (Z :. i :. j :. 0) = f (Z :. i :. j :. 0) -- y
 bwFilterYUV _ (Z :. _ :. _ :. 1) = 0   -- u
 bwFilterYUV _ (Z :. _ :. _ :. 2) = 0   -- v
 
 
--- we use ceiling so we can use multiply word8 with a fraction and then ciel it up to a word8 compatible instance again
-toYUV :: (DIM3 -> Word8) -> DIM3 -> Word8
-toYUV f (Z :. i :. j :. k) = case k of 0 -> ceiling $ wr * r + wg * g + wb * b -- y
-                                       1 -> ceiling $ uMax * ( (b - y) / (1 - wb) ) -- u
-                                       2 -> ceiling $ vMax * ( (r - y) / (1 - wr) ) -- v
-                                       _ -> f (Z :. i :. j :. k)
-                             where
-                                wr = 0.299
-                                wb = 0.114
-                                wg = 1 - wr - wb
-                                uMax = 0.436
-                                vMax = 0.615
-                                r = fromIntegral $ f (Z :. i :. j :. 0)
-                                g = fromIntegral $ f (Z :. i :. j :. 1)
-                                b = fromIntegral $ f (Z :. i :. j :. 2)
-                                a = fromIntegral $ f (Z :. i :. j :. 3)
-                                y = fromIntegral $ f (Z :. i :. j :. 0) -- we need y to calculate the u and v (which might bring troubelsom result given paralisme)
+fromRGBToYUV ::(DIM3 -> Word8) -> DIM3 -> Double
+fromRGBToYUV f (Z :. i :. j :. k) = case k of 0 -> y
+                                              1 -> uMax * ( (b - y) / (1 - wb) ) -- u
+                                              2 -> vMax * ( (r - y) / (1 - wr) ) -- v
+                                    where
+                                        wr = 0.299
+                                        wg = 0.587
+                                        wb = 0.114                                       
+                                        uMax = 0.436
+                                        vMax = 0.615
+                                        r = (fromIntegral $ f (Z :. i :. j :. 0)) / 255
+                                        g = (fromIntegral $ f (Z :. i :. j :. 1)) / 255
+                                        b = (fromIntegral $ f (Z :. i :. j :. 2)) / 255
+                                        y = (wr * r) + (wg * g) + (wb * b)
 
-fromYUV :: (DIM3 -> Word8) -> DIM3 -> Word8
-fromYUV f (Z :. i :. j :. k) = case k of 0 -> ceiling $ 255 * ( y + (v * ( (1 - wr) / (vMax) ) ) ) -- r
-                                         1 -> ceiling $ 255 * ( y + (u * ( (1 - wb) / (uMax) ) ) ) -- g
-                                         2 -> ceiling $ 255 * ( (y - (wr * r) - (wb * b)) / wg )   -- b
-                                         _ -> f (Z :. i :. j :. k)
-                             where
-                                wr = 0.299
-                                wb = 0.114
-                                wg = 1 - wr - wb
-                                uMax = 0.436
-                                vMax = 0.615
-                                -- this will be fucked in parallel execution i guess
-                                r = fromIntegral $ f (Z :. i :. j :. 0)
-                                g = fromIntegral $ f (Z :. i :. j :. 1)
-                                b = fromIntegral $ f (Z :. i :. j :. 2) 
-                                                               
-                                y = fromIntegral $ f (Z :. i :. j :. 0)
-                                u = fromIntegral $ f (Z :. i :. j :. 1)
-                                v = fromIntegral $ f (Z :. i :. j :. 2)
+fromYUVtoRGB :: (DIM3 -> Double) -> DIM3 -> Word8
+fromYUVtoRGB f (Z :. i :. j :. k) = case k of 0 -> ceiling $ 255 * r
+                                              1 -> ceiling $ 255 * ( (y - (wr * r) - (wb * b)) / wg )
+                                              2 -> ceiling $ 255 * b
+                                    where
+                                        wr = 0.299
+                                        wg = 0.587
+                                        wb = 0.114 
+                                        uMax = 0.436
+                                        vMax = 0.615                                                               
+                                        y = f (Z :. i :. j :. 0)
+                                        u = f (Z :. i :. j :. 1)
+                                        v = f (Z :. i :. j :. 2)
+
+                                        r = ( y + (v * ( (1 - wr) / (vMax) ) ) )
+                                        b = ( y + (u * ( (1 - wb) / (uMax) ) ) )
