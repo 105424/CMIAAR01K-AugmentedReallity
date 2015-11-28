@@ -2,7 +2,7 @@
 Repo containing my homework for CMIAAR01K Augmented Reality: maak de Rotterdamse haven zichtbaar
 
 ## Install
-The assignment are made as seperate stack applications so the reccommend way to run them is trought stack
+The assignment are made as seperate stack applications so the reccommend way to run them is trough [stack](http://docs.haskellstack.org/en/stable/README.html)
 
 ```
 mv assignment_1
