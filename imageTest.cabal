@@ -22,7 +22,6 @@ library
                        repa-io,
                        repa-devil,
                        vector,
-                       friday,
                        filepath
   default-language:    Haskell2010
 
