@@ -12,6 +12,13 @@ stack exec assignment1-exe "test.jpg"
 ```
 
 ### Assignment1
+
+#### Dependencies
+The first assigment has a dependency on the c DevIL library which can be installed with the following command on linux
+```
+sudo apt-get install libdevil1c2 libdevil-dev
+```
+
 For the first assignment we needed to implement a BW filter for both the RGB as the YUV format.
 Running the following command will create three images from the test.jpg image.
 ```
